@@ -42,7 +42,7 @@ target_compile_definitions(${EXECUTABLE}
         CMAKE_NO_AUTOLINK
 )
 
-if(LIBRW_PLATFORM_D3D9)
+if(LIBRW_PLATFORM STREQUAL "D3D9")
     target_compile_definitions(${EXECUTABLE}
         PUBLIC
             USE_D3D9
@@ -109,7 +109,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang
         PRIVATE
             "-Wall"
     )
-    if (NOT LIBRW_PLATFORM_PS2)
+    if (NOT LIBRW_PLATFORM STREQUAL "PS2")
         target_compile_options(${EXECUTABLE}
             PRIVATE
                 -Wextra
@@ -130,7 +130,7 @@ else()
     set(${PROJECT}_C_CXX_EXTENSIONS OFF)
 endif()
 
-if(LIBRW_PLATFORM_GL3 AND LIBRW_GL3_GFXLIB STREQUAL "GLFW")
+if(LIBRW_PLATFORM STREQUAL "GL3" AND LIBRW_GL3_GFXLIB STREQUAL "GLFW")
 	include(CheckSymbolExists)
 
 	set(CMAKE_REQUIRED_LIBRARIES glfw)
