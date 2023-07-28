@@ -2,6 +2,7 @@ find_package(Threads REQUIRED)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 file(GLOB_RECURSE ${PROJECT}_SOURCES "*.cpp" "*.h" "*.rc")
+file(GLOB_RECURSE ALL_SRCS_FOR_TREE *.h *.cpp *.c)
 
 function(header_directories RETURN_LIST)
     file(GLOB_RECURSE ALL_SRCS *.h *.cpp *.c)
@@ -23,6 +24,9 @@ list(APPEND ${PROJECT}_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/extras/GitSHA1.cpp")
 add_executable(${EXECUTABLE} WIN32
     ${${PROJECT}_SOURCES}
 )
+
+# Create the source groups for source tree with root at CMAKE_CURRENT_SOURCE_DIR.
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" FILES ${ALL_SRCS_FOR_TREE})
 
 target_link_libraries(${EXECUTABLE} PRIVATE
     librw::librw
