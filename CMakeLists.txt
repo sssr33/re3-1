@@ -48,12 +48,16 @@ else()
 endif()
 add_subdirectory(src)
 
+# specify the C++ standard
+set_property(TARGET ${EXECUTABLE} PROPERTY CXX_STANDARD 20)
+set_property(TARGET ${EXECUTABLE} PROPERTY CXX_STANDARD_REQUIRED ON)
+
 if(MSVC)
     # https://cmake.org/cmake/help/latest/prop_dir/VS_STARTUP_PROJECT.html
     # https://stackoverflow.com/questions/7304625/how-do-i-change-the-startup-project-of-a-visual-studio-solution-via-cmake
-    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT re3)
+    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${EXECUTABLE})
 
-    target_compile_options(re3 PRIVATE "/MP")
+    target_compile_options(${EXECUTABLE} PRIVATE "/MP")
     target_compile_options(librw PRIVATE "/MP")
 endif()
 

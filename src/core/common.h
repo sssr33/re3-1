@@ -393,7 +393,7 @@ template<int s, int t> struct check_size {
 
 #define ABS(a)  (((a) < 0) ? (-(a)) : (a))
 #define norm(value, min, max) (((value) < (min)) ? 0 : (((value) > (max)) ? 1 : (((value) - (min)) / ((max) - (min)))))
-#define lerp(norm, min, max) ( (norm) * ((max) - (min)) + (min) )
+#define lerp_re3(norm, min, max) ( (norm) * ((max) - (min)) + (min) )
 
 #define STRINGIFY(x)                    #x
 #define STR(x)                          STRINGIFY(x)
