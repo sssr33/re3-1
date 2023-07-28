@@ -48,6 +48,15 @@ else()
 endif()
 add_subdirectory(src)
 
+if(MSVC)
+    # https://cmake.org/cmake/help/latest/prop_dir/VS_STARTUP_PROJECT.html
+    # https://stackoverflow.com/questions/7304625/how-do-i-change-the-startup-project-of-a-visual-studio-solution-via-cmake
+    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT re3)
+
+    target_compile_options(re3 PRIVATE "/MP")
+    target_compile_options(librw PRIVATE "/MP")
+endif()
+
 if(${PROJECT}_INSTALL)
     install(DIRECTORY gamefiles/ DESTINATION ".")
     if(LIBRW_PLATFORM_NULL)
