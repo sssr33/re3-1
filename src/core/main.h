@@ -25,6 +25,7 @@ extern wchar gUString[256];
 extern wchar gUString2[256];
 extern bool gbPrintShite;
 extern bool gbModelViewer;
+extern bool gbGameFocused;
 #ifdef TIMEBARS
 extern bool gbShowTimebars;
 #else

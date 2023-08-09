@@ -88,6 +88,7 @@ float FramesPerSecond = 30.0f;
 
 bool gbPrintShite = false;
 bool gbModelViewer;
+bool gbGameFocused = false;
 #ifdef TIMEBARS
 bool gbShowTimebars;
 #endif
@@ -1635,7 +1636,7 @@ Idle(void *arg)
 	{
 #if defined(GTA_PC) && !defined(RW_GL3) && defined(FIX_BUGS)
 		// This is from SA, but it's nice for windowed mode
-		if (!FrontEndMenuManager.m_bRenderGameInMenu) {
+		if (!FrontEndMenuManager.m_bRenderGameInMenu && gbGameFocused) {
 			RwV2d pos;
 			pos.x = SCREEN_WIDTH / 2.0f;
 			pos.y = SCREEN_HEIGHT / 2.0f;

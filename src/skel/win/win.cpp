@@ -133,6 +133,40 @@ static RwBool defaultFullscreenRes = FALSE;
 static RwInt32 bestWndMode = -1;
 #endif
 
+static bool gameFocusWasKilled = false;
+
+void SetShowCursorCount(int count) {
+	ShowCursor(TRUE);
+	int curCount = ShowCursor(FALSE);
+
+	// do not use result of ShowCursor just in case some other thread using ShowCursor
+	while (curCount > count) {
+		ShowCursor(FALSE);
+		--curCount;
+	}
+
+	while (curCount < count) {
+		ShowCursor(TRUE);
+		++curCount;
+	}
+	// else curCount == count
+}
+
+void SetCursorVisibility(bool visible) {
+	// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showcursor#remarks
+	int visibilityCount = visible ? 0 : -1;
+	SetShowCursorCount(visibilityCount);
+}
+
+void AcquireFocus() {
+	if (!gbGameFocused) {
+		gameFocusWasKilled = false;
+		gbGameFocused = true;
+		SetShowCursorCount(-1);
+		SetCursorVisibility(false); // hide system cusror
+	}
+}
+
 CJoySticks::CJoySticks()
 {
 	for (int i = 0; i < MAX_JOYSTICKS; i++)
@@ -963,17 +997,16 @@ MainWndProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	POINTS points;
 	static BOOL noMemory = FALSE;
-
 	
 	switch( message )
 	{
 		case WM_SETCURSOR:
 		{
-			ShowCursor(FALSE);
+			if (!gameFocusWasKilled) {
+				SetCursor(NULL);
+			}
 			
-			SetCursor(nil);
-			
-			break; // is this correct ?
+			break;
 		}
 		
 		case WM_SIZE:
@@ -1073,10 +1106,12 @@ MainWndProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case WM_MOUSEMOVE:
 		{
-			points = MAKEPOINTS(lParam);
+			if (gbGameFocused) {
+				points = MAKEPOINTS(lParam);
 
-			FrontEndMenuManager.m_nMouseTempPosX = points.x;
-			FrontEndMenuManager.m_nMouseTempPosY = points.y;
+				FrontEndMenuManager.m_nMouseTempPosX = points.x;
+				FrontEndMenuManager.m_nMouseTempPosY = points.y;
+			}
 
 			return 0L;
 		}
@@ -1084,6 +1119,7 @@ MainWndProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 		case WM_LBUTTONUP:
 		{
 			ReleaseCapture();
+			AcquireFocus();
 
 			return 0L;
 		}
@@ -1091,6 +1127,7 @@ MainWndProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 		case WM_RBUTTONUP:
 		{
 			ReleaseCapture();
+			AcquireFocus();
 
 			return 0L;
 		}
@@ -1098,75 +1135,84 @@ MainWndProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 		case WM_MBUTTONUP:
 		{
 			ReleaseCapture();
+			AcquireFocus();
 
 			return 0L;
 		}
 
 		case WM_KEYDOWN:
 		{
-			RsKeyCodes ks;
-			
-			if ( _InputTranslateKey(&ks, lParam, wParam) )
-				RsKeyboardEventHandler(rsKEYDOWN, &ks);
+			if (gbGameFocused) {
+				RsKeyCodes ks;
 
-			if ( wParam == VK_SHIFT )
-				_InputTranslateShiftKeyUpDown(&ks);
+				if (_InputTranslateKey(&ks, lParam, wParam))
+					RsKeyboardEventHandler(rsKEYDOWN, &ks);
+
+				if (wParam == VK_SHIFT)
+					_InputTranslateShiftKeyUpDown(&ks);
 #ifdef FIX_BUGS
-			break;
+				break;
 #else
-			return 0L;
+				return 0L;
 #endif
+			}
 		}
 
 		case WM_KEYUP:
 		{
-			RsKeyCodes ks;
+			if (gbGameFocused) {
+				RsKeyCodes ks;
 
-			if ( _InputTranslateKey(&ks, lParam, wParam) )
-				RsKeyboardEventHandler(rsKEYUP, &ks);
+				if (_InputTranslateKey(&ks, lParam, wParam))
+					RsKeyboardEventHandler(rsKEYUP, &ks);
 
-			if ( wParam == VK_SHIFT )
-				_InputTranslateShiftKeyUpDown(&ks);
+				if (wParam == VK_SHIFT)
+					_InputTranslateShiftKeyUpDown(&ks);
 
 #ifdef FIX_BUGS
-			break;
+				break;
 #else
-			return 0L;
+				return 0L;
 #endif
+			}
 		}
 
 		case WM_SYSKEYDOWN:
 		{
-			RsKeyCodes ks;
-			
-			if ( _InputTranslateKey(&ks, lParam, wParam) )
-				RsKeyboardEventHandler(rsKEYDOWN, &ks);
+			if (gbGameFocused) {
+				RsKeyCodes ks;
 
-			if ( wParam == VK_SHIFT )
-				_InputTranslateShiftKeyUpDown(&ks);
+				if (_InputTranslateKey(&ks, lParam, wParam))
+					RsKeyboardEventHandler(rsKEYDOWN, &ks);
+
+				if (wParam == VK_SHIFT)
+					_InputTranslateShiftKeyUpDown(&ks);
 
 #ifdef FIX_BUGS
-			break;
+				break;
 #else
-			return 0L;
+				return 0L;
 #endif
+			}
 		}
 
 		case WM_SYSKEYUP:
 		{
-			RsKeyCodes ks;
+			if (gbGameFocused) {
+				RsKeyCodes ks;
 
-			if ( _InputTranslateKey(&ks, lParam, wParam) )
-				RsKeyboardEventHandler(rsKEYUP, &ks);
+				if (_InputTranslateKey(&ks, lParam, wParam))
+					RsKeyboardEventHandler(rsKEYUP, &ks);
 
-			if ( wParam == VK_SHIFT )
-				_InputTranslateShiftKeyUpDown(&ks);
+				if (wParam == VK_SHIFT)
+					_InputTranslateShiftKeyUpDown(&ks);
 
 #ifdef FIX_BUGS
-			break;
+				break;
 #else
-			return 0L;
+				return 0L;
 #endif
+			}
 		}
 
 		case WM_ACTIVATEAPP:
@@ -1302,7 +1348,23 @@ MainWndProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 			
 			break;
 		}
-
+		case WM_KILLFOCUS:
+		{
+			gbGameFocused = false;
+			gameFocusWasKilled = true;
+			SetCursor(LoadCursor(NULL, IDC_ARROW));
+			SetCursorVisibility(true); // show cursor after losing focus
+			break;
+		}
+		case WM_SETFOCUS:
+		{
+			// allow 1 click on game window before applying focus and activating game logic
+			// useful when debugging
+			if (!gameFocusWasKilled) {
+				gbGameFocused = true;
+			}
+			break;
+		}
 	}
 
 	/*
@@ -1335,7 +1397,7 @@ InitApplication(HANDLE instance)
 #else
 	windowClass.hIcon = nil;
 #endif
-	windowClass.hCursor = LoadCursor(nil, IDC_ARROW);
+	windowClass.hCursor = NULL;
 	windowClass.hbrBackground = nil;
 	windowClass.lpszMenuName = NULL;
 	windowClass.lpszClassName = AppClassName;
@@ -1350,7 +1412,7 @@ InitApplication(HANDLE instance)
 
 RwBool IsForegroundApp()
 {
-	return !!ForegroundApp;
+	return !!ForegroundApp && gbGameFocused;
 }
 
 UINT GetBestRefreshRate(UINT width, UINT height, UINT depth)
@@ -2220,7 +2282,7 @@ WinMain(HINSTANCE instance,
 #endif
 	}
 #endif
-
+	SetCursorVisibility(false); // hide cursor once
 	while ( TRUE )
 	{
 		RwInitialised = TRUE;
@@ -2621,7 +2683,7 @@ WinMain(HINSTANCE instance,
 	 */
 	free(argv);
 	
-	ShowCursor(TRUE);
+	SetCursorVisibility(true);
 	
 	SystemParametersInfo(SPI_SETSTICKYKEYS, sizeof(STICKYKEYS), &SavedStickyKeys, SPIF_SENDCHANGE);
 	SystemParametersInfo(SPI_SETPOWEROFFACTIVE, TRUE, nil, SPIF_SENDCHANGE);
