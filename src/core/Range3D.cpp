@@ -28,3 +28,11 @@ CRange3D::GetRandomPointInRange()
 
 	return CVector(outX, outY, outZ);
 }
+
+const CVector& CRange3D::GetMin() const {
+	return min;
+}
+
+const CVector& CRange3D::GetMax() const {
+	return max;
+}

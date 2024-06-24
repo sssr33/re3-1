@@ -58,6 +58,7 @@ RwTexture *gpCoronaTexture[9] = { nil, nil, nil, nil, nil, nil, nil, nil, nil };
 float CCoronas::LightsMult = 1.0f;
 float CCoronas::SunScreenX;
 float CCoronas::SunScreenY;
+CVector CCoronas::Sun3dPos;
 bool CCoronas::bSmallMoon;
 bool CCoronas::SunBlockedByClouds;
 int CCoronas::bChangeBrightnessImmediately;
@@ -260,6 +261,8 @@ CCoronas::Render(void)
 		   aCoronas[i].fadeAlpha == 0 && aCoronas[i].alpha == 0)
 			continue;
 
+		bool isSun = false;// CCoronas::aCoronas[i].id == SUN_CORE || CCoronas::aCoronas[i].id == SUN_CORONA;
+
 		CVector spriteCoors;
 		float spritew, spriteh;
 		if(!CSprite::CalcScreenCoors(aCoronas[i].coors, &spriteCoors, &spritew, &spriteh, true)){
@@ -268,8 +271,8 @@ CCoronas::Render(void)
 		}else{
 			aCoronas[i].offScreen = false;
 
-			if(spriteCoors.x < 0.0f || spriteCoors.y < 0.0f ||
-			   spriteCoors.x > screenw || spriteCoors.y > screenh){
+			if((spriteCoors.x < 0.0f || spriteCoors.y < 0.0f ||
+			   spriteCoors.x > screenw || spriteCoors.y > screenh) && !isSun){
 				aCoronas[i].offScreen = true;
 				aCoronas[i].sightClear = false;
 			}else{
@@ -544,6 +547,7 @@ CCoronas::DoSunAndMoon(void)
 
 	CVector spriteCoors;
 	float spritew, spriteh;
+	Sun3dPos = sunCoors;
 	if(CSprite::CalcScreenCoors(sunCoors, &spriteCoors, &spritew, &spriteh, true)){
 		SunScreenX = spriteCoors.x;
 		SunScreenY = spriteCoors.y;

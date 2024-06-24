@@ -8,4 +8,7 @@ public:
 	bool IsInRange(CVector vec);
 	void DebugShowRange(float, int);
 	CVector GetRandomPointInRange();
+
+	const CVector& GetMin() const;
+	const CVector& GetMax() const;
 };

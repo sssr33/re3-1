@@ -81,6 +81,7 @@ public:
 	static float LightsMult;
 	static float SunScreenY;
 	static float SunScreenX;
+	static CVector Sun3dPos;
 	static bool bSmallMoon;
 	static bool SunBlockedByClouds;
 	static int bChangeBrightnessImmediately;

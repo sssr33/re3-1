@@ -13,6 +13,11 @@
 #include "Timecycle.h"
 #include "Renderer.h"
 #include "Clouds.h"
+#include "Range3D.h"
+
+#include <algorithm>
+#include <vector>
+#include <time.h>
 
 #define SMALLSTRIPHEIGHT 4.0f
 #define HORIZSTRIPHEIGHT 48.0f
@@ -27,6 +32,85 @@ float CClouds::ms_horizonZ;
 CRGBA CClouds::ms_colourTop;
 CRGBA CClouds::ms_colourBottom;
 
+static CVector CloudsSkyBoxCenter = CVector(600.f, -450.f, 0.f);
+static CVector CloudsSkyBoxSize = CVector(5000.f, 5000.f, 0.f);
+static CVector CloudsSkyBoxMin = CVector(-300.f, -300.f, 125);// 40.f * 0.3f + 40.f);
+static CVector CloudsSkyBoxMax = CVector(300.f, 300.f, 136);// 40.f * 2.4f + 40.f);
+static CRange3D CloudsSkyBoxRange = CRange3D(CloudsSkyBoxMin, CloudsSkyBoxMax);
+static std::vector<CVector> CloudsMovePos;
+static const bool UseGeneratedClouds = false;
+
+float CoorsOffsetX[37] = {
+	0.0f, 60.0f, 72.0f, 48.0f, 21.0f, 12.0f,
+	9.0f, -3.0f, -8.4f, -18.0f, -15.0f, -36.0f,
+	-40.0f, -48.0f, -60.0f, -24.0f, 100.0f, 100.0f,
+	100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f,
+	100.0f, 100.0f, -30.0f, -20.0f, 10.0f, 30.0f,
+	0.0f, -100.0f, -100.0f, -100.0f, -100.0f, -100.0f, -100.0f
+};
+float CoorsOffsetY[37] = {
+	100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f,
+	100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f,
+	100.0f, 100.0f, 100.0f, 100.0f, -30.0f, 10.0f,
+	-25.0f, -5.0f, 28.0f, -10.0f, 10.0f, 0.0f,
+	15.0f, 40.0f, -100.0f, -100.0f, -100.0f, -100.0f,
+	-100.0f, -40.0f, -20.0f, 0.0f, 10.0f, 30.0f, 35.0f
+};
+float CoorsOffsetZ[37] = {
+	2.0f, 1.0f, 0.0f, 0.3f, 0.7f, 1.4f,
+	1.7f, 0.24f, 0.7f, 1.3f, 1.6f, 1.0f,
+	1.2f, 0.3f, 0.7f, 1.4f, 0.0f, 0.1f,
+	0.5f, 0.4f, 0.55f, 0.75f, 1.0f, 1.4f,
+	1.7f, 2.0f, 2.0f, 2.3f, 1.9f, 2.4f,
+	2.0f, 2.0f, 1.5f, 1.2f, 1.7f, 1.5f, 2.1f
+};
+
+float RndFloat2() {
+	float val = static_cast<float>(rand() % 1000) / 1000.f;
+	return val;
+}
+
+CVector GetRandomPointInRange2(const CRange3D& range) {
+	const auto& min = range.GetMin();
+	const auto& max = range.GetMax();
+
+	float distX = Abs(max.x - min.x);
+	float distY = Abs(max.y - min.y);
+	float distZ = Abs(max.z - min.z);
+
+	float outX = RndFloat2() * distX + min.x;
+	float outY = RndFloat2() * distY + min.y;
+	float outZ = RndFloat2() * distZ + min.z;
+
+	constexpr float epsilon = 0.00001f;
+
+	if (outX <= min.x) {
+		outX += (std::min)(epsilon, distX);
+	}
+	if (outY <= min.y) {
+		outY += (std::min)(epsilon, distY);
+	}
+	if (outZ <= min.z) {
+		outZ += (std::min)(epsilon, distZ);
+	}
+
+	if (outX >= max.x) {
+		outX -= (std::min)(epsilon, distX);
+	}
+	if (outY >= max.y) {
+		outY -= (std::min)(epsilon, distY);
+	}
+	if (outZ >= max.z) {
+		outZ -= (std::min)(epsilon, distZ);
+	}
+
+	outX = std::clamp(outX, min.x, max.x);
+	outY = std::clamp(outY, min.y, max.y);
+	outZ = std::clamp(outZ, min.z, max.z);
+
+	return CVector(outX, outY, outZ);
+}
+
 void
 CClouds::Init(void)
 {
@@ -39,6 +123,33 @@ CClouds::Init(void)
 	gpCloudTex[4] = RwTextureRead("cloudmasked", nil);
 	CTxdStore::PopCurrentTxd();
 	CloudRotation = 0.0f;
+
+	if (UseGeneratedClouds) {
+		const size_t cloudsCount = 1000;
+		CloudsMovePos.reserve(cloudsCount);
+
+		srand(time(NULL));
+
+		CVector CloudsSkyBoxNewMin = CVector(
+			CloudsSkyBoxCenter.x - (CloudsSkyBoxSize.x / 2.f),
+			CloudsSkyBoxCenter.y - (CloudsSkyBoxSize.y / 2.f),
+			CloudsSkyBoxMin.z
+		);
+		CVector CloudsSkyBoxNewMax = CVector(
+			CloudsSkyBoxCenter.x + (CloudsSkyBoxSize.x / 2.f),
+			CloudsSkyBoxCenter.y + (CloudsSkyBoxSize.y / 2.f),
+			CloudsSkyBoxMax.z
+		);
+
+		CloudsSkyBoxRange = CRange3D(CloudsSkyBoxNewMin, CloudsSkyBoxNewMax);
+
+		for (size_t i = 0; i < cloudsCount; ++i) {
+			CloudsMovePos.push_back(GetRandomPointInRange2(CloudsSkyBoxRange));
+		}
+	}
+	else {
+		CloudsMovePos.reserve(std::size(CoorsOffsetX));
+	}
 }
 
 void
@@ -77,6 +188,66 @@ CClouds::Update(void)
 	CloudRotation += CWeather::Wind*s*0.0025f;
 	IndividualRotation += (CWeather::Wind*CTimer::GetTimeStep() + 0.3f) * 60.0f;
 #endif
+
+	if (UseGeneratedClouds) {
+		static CVector CloudsMoveDir = CVector(1.f, 0.f, 0.f);
+		static float CloudsMoveSpeed = 1.f;
+		/*static float SkyBoxMaxX = 300.f;
+		static float SkyBoxMinX = -300.f;
+		static float SkyBoxMaxY = 300.f;
+		static float SkyBoxMinY = -300.f;
+
+		float skyBoxXSize = SkyBoxMaxX - SkyBoxMinX;
+		float skyBoxYSize = SkyBoxMaxY - SkyBoxMinY;*/
+
+		CVector CloudsSkyBoxNewMin = CVector(
+			CloudsSkyBoxCenter.x - (CloudsSkyBoxSize.x / 2.f),
+			CloudsSkyBoxCenter.y - (CloudsSkyBoxSize.y / 2.f),
+			CloudsSkyBoxMin.z
+		);
+		CVector CloudsSkyBoxNewMax = CVector(
+			CloudsSkyBoxCenter.x + (CloudsSkyBoxSize.x / 2.f),
+			CloudsSkyBoxCenter.y + (CloudsSkyBoxSize.y / 2.f),
+			CloudsSkyBoxMax.z
+		);
+
+		CloudsSkyBoxRange = CRange3D(CloudsSkyBoxNewMin, CloudsSkyBoxNewMax);
+		auto CloudsSkyBoxSpawnRange = CRange3D(CloudsSkyBoxNewMin, CVector(CloudsSkyBoxNewMin.x + 2.f, CloudsSkyBoxNewMax.y, CloudsSkyBoxNewMax.z));
+
+		if (false) {
+			for (auto& i : CloudsMovePos) {
+				i = GetRandomPointInRange2(CloudsSkyBoxRange);
+			}
+		}
+
+		auto cloudsMoveDirNorm = CloudsMoveDir;
+		cloudsMoveDirNorm.Normalise();
+
+		for (auto& i : CloudsMovePos) {
+			i += cloudsMoveDirNorm * CloudsMoveSpeed * CTimer::GetTimeStepFix();
+
+			if (!CloudsSkyBoxRange.IsInRange(i)) {
+				i = GetRandomPointInRange2(CloudsSkyBoxSpawnRange);
+			}
+		}
+	}
+	else {
+		CloudsMovePos.clear();
+
+		float rot_sin = Sin(CloudRotation);
+		float rot_cos = Cos(CloudRotation);
+		RwV3d campos = TheCamera.GetPosition();
+
+		for (size_t i = 0; i < std::size(CoorsOffsetX); ++i) {
+			CVector worldpos;
+			RwV3d pos = { 2.0f * CoorsOffsetX[i], 2.0f * CoorsOffsetY[i], 40.0f * CoorsOffsetZ[i] + 40.0f };
+			worldpos.x = pos.x * rot_cos + pos.y * rot_sin + campos.x;
+			worldpos.y = pos.x * rot_sin - pos.y * rot_cos + campos.y;
+			worldpos.z = pos.z;
+
+			CloudsMovePos.push_back(worldpos);
+		}
+	}
 }
 
 float StarCoorsX[9] = { 0.0f, 0.05f, 0.12f, 0.5f, 0.8f, 0.6f, 0.27f, 0.55f, 0.75f };
@@ -87,30 +258,30 @@ float LowCloudsX[12] = { 1.0f, 0.7f, 0.0f, -0.7f, -1.0f, -0.7f, 0.0f, 0.7f, 0.8f
 float LowCloudsY[12] = { 0.0f, -0.7f, -1.0f, -0.7f, 0.0f, 0.7f, 1.0f, 0.7f, 0.4f, 0.4f, -0.8f, -0.8f };
 float LowCloudsZ[12] = { 0.0f, 1.0f, 0.5f, 0.0f, 1.0f, 0.3f, 0.9f, 0.4f, 1.3f, 1.4f, 1.2f, 1.7f };
 
-float CoorsOffsetX[37] = {
-	0.0f, 60.0f, 72.0f, 48.0f, 21.0f, 12.0f,
-	9.0f, -3.0f, -8.4f, -18.0f, -15.0f, -36.0f,
-	-40.0f, -48.0f, -60.0f, -24.0f, 100.0f, 100.0f,
-	100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f,
-	100.0f, 100.0f, -30.0f, -20.0f, 10.0f, 30.0f,
-	0.0f, -100.0f, -100.0f, -100.0f, -100.0f, -100.0f, -100.0f
-};
-float CoorsOffsetY[37] = {
-	100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f,
-	100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f,
-	100.0f, 100.0f, 100.0f, 100.0f, -30.0f, 10.0f,
-	-25.0f, -5.0f, 28.0f, -10.0f, 10.0f, 0.0f,
-	15.0f, 40.0f, -100.0f, -100.0f, -100.0f, -100.0f,
-	-100.0f, -40.0f, -20.0f, 0.0f, 10.0f, 30.0f, 35.0f
-};
-float CoorsOffsetZ[37] = {
-	2.0f, 1.0f, 0.0f, 0.3f, 0.7f, 1.4f,
-	1.7f, 0.24f, 0.7f, 1.3f, 1.6f, 1.0f,
-	1.2f, 0.3f, 0.7f, 1.4f, 0.0f, 0.1f,
-	0.5f, 0.4f, 0.55f, 0.75f, 1.0f, 1.4f,
-	1.7f, 2.0f, 2.0f, 2.3f, 1.9f, 2.4f,
-	2.0f, 2.0f, 1.5f, 1.2f, 1.7f, 1.5f, 2.1f
-};
+//float CoorsOffsetX[37] = {
+//	0.0f, 60.0f, 72.0f, 48.0f, 21.0f, 12.0f,
+//	9.0f, -3.0f, -8.4f, -18.0f, -15.0f, -36.0f,
+//	-40.0f, -48.0f, -60.0f, -24.0f, 100.0f, 100.0f,
+//	100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f,
+//	100.0f, 100.0f, -30.0f, -20.0f, 10.0f, 30.0f,
+//	0.0f, -100.0f, -100.0f, -100.0f, -100.0f, -100.0f, -100.0f
+//};
+//float CoorsOffsetY[37] = {
+//	100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f,
+//	100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f,
+//	100.0f, 100.0f, 100.0f, 100.0f, -30.0f, 10.0f,
+//	-25.0f, -5.0f, 28.0f, -10.0f, 10.0f, 0.0f,
+//	15.0f, 40.0f, -100.0f, -100.0f, -100.0f, -100.0f,
+//	-100.0f, -40.0f, -20.0f, 0.0f, 10.0f, 30.0f, 35.0f
+//};
+//float CoorsOffsetZ[37] = {
+//	2.0f, 1.0f, 0.0f, 0.3f, 0.7f, 1.4f,
+//	1.7f, 0.24f, 0.7f, 1.3f, 1.6f, 1.0f,
+//	1.2f, 0.3f, 0.7f, 1.4f, 0.0f, 0.1f,
+//	0.5f, 0.4f, 0.55f, 0.75f, 1.0f, 1.4f,
+//	1.7f, 2.0f, 2.0f, 2.3f, 1.9f, 2.4f,
+//	2.0f, 2.0f, 1.5f, 1.2f, 1.7f, 1.5f, 2.1f
+//};
 
 uint8 BowRed[6] = { 30, 30, 30, 10, 0, 15 };
 uint8 BowGreen[6] = { 0, 15, 30, 30, 0, 0 };
@@ -201,95 +372,143 @@ CClouds::Render(void)
 		}
 	}
 
-	// Low clouds
-	float lowcloudintensity = 1.0f - Max(CWeather::Foggyness, CWeather::CloudCoverage);
-	int r = CTimeCycle::GetLowCloudsRed() * lowcloudintensity;
-	int g = CTimeCycle::GetLowCloudsGreen() * lowcloudintensity;
-	int b = CTimeCycle::GetLowCloudsBlue() * lowcloudintensity;
-	for(int cloudtype = 0; cloudtype < 3; cloudtype++){
-		for(i = cloudtype; i < 12; i += 3){
-			RwRenderStateSet(rwRENDERSTATETEXTURERASTER, RwTextureGetRaster(gpCloudTex[cloudtype]));
-			RwV3d pos = { 800.0f*LowCloudsX[i], 800.0f*LowCloudsY[i], 60.0f*LowCloudsZ[i] };
-			worldpos.x = campos.x + pos.x;
-			worldpos.y = campos.y + pos.y;
-			worldpos.z = 40.0f + pos.z;
-			if(CSprite::CalcScreenCoors(worldpos, &screenpos, &szx, &szy, false))
-				CSprite::RenderBufferedOneXLUSprite_Rotate_Dimension(screenpos.x, screenpos.y, screenpos.z,
-					szx*320.0f, szy*40.0f, r, g, b, 255, 1.0f/screenpos.z, ms_cameraRoll, 255);
+	static bool dbg_LowCloudsEnable = true;
+	static bool dbg_FluffyCloudsEnable = true;
+
+	if (dbg_LowCloudsEnable) {
+		// Low clouds
+		float lowcloudintensity = 1.0f - Max(CWeather::Foggyness, CWeather::CloudCoverage);
+		int r = CTimeCycle::GetLowCloudsRed() * lowcloudintensity;
+		int g = CTimeCycle::GetLowCloudsGreen() * lowcloudintensity;
+		int b = CTimeCycle::GetLowCloudsBlue() * lowcloudintensity;
+		for (int cloudtype = 0; cloudtype < 3; cloudtype++) {
+			for (i = cloudtype; i < 12; i += 3) {
+				RwRenderStateSet(rwRENDERSTATETEXTURERASTER, RwTextureGetRaster(gpCloudTex[cloudtype]));
+				RwV3d pos = { 800.0f * LowCloudsX[i], 800.0f * LowCloudsY[i], 60.0f * LowCloudsZ[i] };
+				worldpos.x = campos.x + pos.x;
+				worldpos.y = campos.y + pos.y;
+				worldpos.z = 40.0f + pos.z;
+				if (CSprite::CalcScreenCoors(worldpos, &screenpos, &szx, &szy, false))
+					CSprite::RenderBufferedOneXLUSprite_Rotate_Dimension(screenpos.x, screenpos.y, screenpos.z,
+						szx * 320.0f, szy * 40.0f, r, g, b, 255, 1.0f / screenpos.z, ms_cameraRoll, 255);
+			}
+			CSprite::FlushSpriteBuffer();
 		}
-		CSprite::FlushSpriteBuffer();
 	}
 
-	// Fluffy clouds
-	float rot_sin = Sin(CloudRotation);
-	float rot_cos = Cos(CloudRotation);
-	int fluffyalpha = 160 * (1.0f - CWeather::Foggyness);
-	if(fluffyalpha != 0){
-		static bool bCloudOnScreen[37];
-		float hilight;
+	if (dbg_FluffyCloudsEnable) {
+		// Fluffy clouds
+		float rot_sin = Sin(CloudRotation);
+		float rot_cos = Cos(CloudRotation);
+		int fluffyalpha = 160 * (1.0f - CWeather::Foggyness);
+		if (fluffyalpha != 0) {
+			static std::vector<bool> bCloudOnScreen;
+			static std::vector<float> hilight;
 
-		RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDSRCALPHA);
-		RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDINVSRCALPHA);
-		RwRenderStateSet(rwRENDERSTATETEXTURERASTER, RwTextureGetRaster(gpCloudTex[4]));
-		for(i = 0; i < 37; i++){
-			RwV3d pos = { 2.0f*CoorsOffsetX[i], 2.0f*CoorsOffsetY[i], 40.0f*CoorsOffsetZ[i] + 40.0f };
-			worldpos.x = pos.x*rot_cos + pos.y*rot_sin + campos.x;
-			worldpos.y = pos.x*rot_sin - pos.y*rot_cos + campos.y;
-			worldpos.z = pos.z;
+			if (bCloudOnScreen.size() != CloudsMovePos.size()) {
+				bCloudOnScreen.resize(CloudsMovePos.size());
+			}
 
-			if(CSprite::CalcScreenCoors(worldpos, &screenpos, &szx, &szy, false)){
-				float sundist = Sqrt(sq(screenpos.x-CCoronas::SunScreenX) + sq(screenpos.y-CCoronas::SunScreenY));
-				int tr = CTimeCycle::GetFluffyCloudsTopRed();
-				int tg = CTimeCycle::GetFluffyCloudsTopGreen();
-				int tb = CTimeCycle::GetFluffyCloudsTopBlue();
-				int br = CTimeCycle::GetFluffyCloudsBottomRed();
-				int bg = CTimeCycle::GetFluffyCloudsBottomGreen();
-				int bb = CTimeCycle::GetFluffyCloudsBottomBlue();
-				if(sundist < SCREEN_WIDTH/2){
-					hilight = (1.0f - Max(CWeather::Foggyness, CWeather::CloudCoverage)) * (1.0f - sundist/(SCREEN_WIDTH/2));
-					tr = tr*(1.0f-hilight) + 255*hilight;
-					tg = tg*(1.0f-hilight) + 190*hilight;
-					tb = tb*(1.0f-hilight) + 190*hilight;
-					br = br*(1.0f-hilight) + 255*hilight;
-					bg = bg*(1.0f-hilight) + 190*hilight;
-					bb = bb*(1.0f-hilight) + 190*hilight;
-					if(sundist < SCREEN_WIDTH/10)
+			if (hilight.size() != CloudsMovePos.size()) {
+				hilight.resize(CloudsMovePos.size());
+			}
+
+			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDSRCALPHA);
+			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDINVSRCALPHA);
+			RwRenderStateSet(rwRENDERSTATETEXTURERASTER, RwTextureGetRaster(gpCloudTex[4]));
+
+			static int dbg_FluffyCloudToDraw = -1;
+
+			for (size_t i = 0; i < CloudsMovePos.size(); i++) {
+				if (dbg_FluffyCloudToDraw >= 0 && i != dbg_FluffyCloudToDraw) {
+					continue;
+				}
+
+				const auto& worldpos = CloudsMovePos[i];
+
+				/*RwV3d pos = { 2.0f * CoorsOffsetX[i], 2.0f * CoorsOffsetY[i], 40.0f * CoorsOffsetZ[i] + 40.0f };
+				worldpos.x = pos.x * rot_cos + pos.y * rot_sin + campos.x;
+				worldpos.y = pos.x * rot_sin - pos.y * rot_cos + campos.y;
+				worldpos.z = pos.z;
+
+				worldpos.x += CloudsMoveCur[i].x;
+				worldpos.y += CloudsMoveCur[i].y;
+				worldpos.z += CloudsMoveCur[i].z;*/
+
+				if (CSprite::CalcScreenCoors(worldpos, &screenpos, &szx, &szy, false)) {
+					float sundist2D = Sqrt(sq(screenpos.x - CCoronas::SunScreenX) + sq(screenpos.y - CCoronas::SunScreenY));
+					auto sunVec = worldpos - CCoronas::Sun3dPos;
+					float sundist3D = sunVec.Magnitude();
+					static float MaxHighlightDist2D = SCREEN_WIDTH / 2;
+					static float MaxHighlightDist3D = 200.f;
+
+					int tr = CTimeCycle::GetFluffyCloudsTopRed();
+					int tg = CTimeCycle::GetFluffyCloudsTopGreen();
+					int tb = CTimeCycle::GetFluffyCloudsTopBlue();
+					int br = CTimeCycle::GetFluffyCloudsBottomRed();
+					int bg = CTimeCycle::GetFluffyCloudsBottomGreen();
+					int bb = CTimeCycle::GetFluffyCloudsBottomBlue();
+
+					if (sundist2D < SCREEN_WIDTH / 10)
 						CCoronas::SunBlockedByClouds = true;
-				}else
-					hilight = 0.0f;
-				CSprite::RenderBufferedOneXLUSprite_Rotate_2Colours(screenpos.x, screenpos.y, screenpos.z,
-					szx*55.0f, szy*55.0f,
-					tr, tg, tb, br, bg, bb, 0.0f, -1.0f,
-					1.0f/screenpos.z,
-					(uint16)IndividualRotation/65336.0f * 6.28f + ms_cameraRoll,
-					fluffyalpha);
-				bCloudOnScreen[i] = true;
-			}else
-				bCloudOnScreen[i] = false;
-		}
-		CSprite::FlushSpriteBuffer();
 
-		// Highlights
-		RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
-		RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
-		RwRenderStateSet(rwRENDERSTATETEXTURERASTER, RwTextureGetRaster(gpCloudTex[3]));
+					if (sundist3D < MaxHighlightDist3D) {
+						hilight[i] = (1.0f - Max(CWeather::Foggyness, CWeather::CloudCoverage)) * (1.0f - sundist3D / MaxHighlightDist3D);
+						tr = tr * (1.0f - hilight[i]) + 255 * hilight[i];
+						tg = tg * (1.0f - hilight[i]) + 190 * hilight[i];
+						tb = tb * (1.0f - hilight[i]) + 190 * hilight[i];
+						br = br * (1.0f - hilight[i]) + 255 * hilight[i];
+						bg = bg * (1.0f - hilight[i]) + 190 * hilight[i];
+						bb = bb * (1.0f - hilight[i]) + 190 * hilight[i];
+					}
+					else
+						hilight[i] = 0.0f;
+					CSprite::RenderBufferedOneXLUSprite_Rotate_2Colours(screenpos.x, screenpos.y, screenpos.z,
+						szx * 55.0f, szy * 55.0f,
+						tr, tg, tb, br, bg, bb, 0.0f, -1.0f,
+						1.0f / screenpos.z,
+						(uint16)IndividualRotation / 65336.0f * 6.28f + ms_cameraRoll,
+						fluffyalpha);
+					bCloudOnScreen[i] = true;
+				}
+				else
+					bCloudOnScreen[i] = false;
+			}
+			CSprite::FlushSpriteBuffer();
 
-		for(i = 0; i < 37; i++){
-			RwV3d pos = { 2.0f*CoorsOffsetX[i], 2.0f*CoorsOffsetY[i], 40.0f*CoorsOffsetZ[i] + 40.0f };
-			worldpos.x = pos.x*rot_cos + pos.y*rot_sin + campos.x;
-			worldpos.y = pos.x*rot_sin - pos.y*rot_cos + campos.y;
-			worldpos.z = pos.z;
-			if(bCloudOnScreen[i] && CSprite::CalcScreenCoors(worldpos, &screenpos, &szx, &szy, false)){
-				// BUG: this is stupid....would have to do this for each cloud individually
-				if(hilight > 0.0f){
-					CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect(screenpos.x, screenpos.y, screenpos.z,
-						szx*30.0f, szy*30.0f,
-						200*hilight, 0, 0, 255, 1.0f/screenpos.z,
-						1.7f - CGeneral::GetATanOfXY(screenpos.x-CCoronas::SunScreenX, screenpos.y-CCoronas::SunScreenY) + CClouds::ms_cameraRoll, 255);
+			// Highlights
+			RwRenderStateSet(rwRENDERSTATESRCBLEND, (void*)rwBLENDONE);
+			RwRenderStateSet(rwRENDERSTATEDESTBLEND, (void*)rwBLENDONE);
+			RwRenderStateSet(rwRENDERSTATETEXTURERASTER, RwTextureGetRaster(gpCloudTex[3]));
+
+			for (size_t i = 0; i < CloudsMovePos.size(); i++) {
+				if (dbg_FluffyCloudToDraw >= 0 && i != dbg_FluffyCloudToDraw) {
+					continue;
+				}
+
+				const auto& worldpos = CloudsMovePos[i];
+
+				/*RwV3d pos = { 2.0f * CoorsOffsetX[i], 2.0f * CoorsOffsetY[i], 40.0f * CoorsOffsetZ[i] + 40.0f };
+				worldpos.x = pos.x * rot_cos + pos.y * rot_sin + campos.x;
+				worldpos.y = pos.x * rot_sin - pos.y * rot_cos + campos.y;
+				worldpos.z = pos.z;
+
+				worldpos.x += CloudsMoveCur[i].x;
+				worldpos.y += CloudsMoveCur[i].y;
+				worldpos.z += CloudsMoveCur[i].z;*/
+
+				if (bCloudOnScreen[i] && CSprite::CalcScreenCoors(worldpos, &screenpos, &szx, &szy, false)) {
+					// BUG: this is stupid....would have to do this for each cloud individually
+					if (hilight[i] > 0.0f) {
+						CSprite::RenderBufferedOneXLUSprite_Rotate_Aspect(screenpos.x, screenpos.y, screenpos.z,
+							szx * 30.0f, szy * 30.0f,
+							200 * hilight[i], 0, 0, 255, 1.0f / screenpos.z,
+							1.7f - CGeneral::GetATanOfXY(screenpos.x - CCoronas::SunScreenX, screenpos.y - CCoronas::SunScreenY) + CClouds::ms_cameraRoll, 255);
+					}
 				}
 			}
+			CSprite::FlushSpriteBuffer();
 		}
-		CSprite::FlushSpriteBuffer();
 	}
 
 	// Rainbow
